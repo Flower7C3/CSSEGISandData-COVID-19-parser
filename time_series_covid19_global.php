@@ -15,12 +15,13 @@ if (php_sapi_name() != 'cli') {
 $spreadSheetId = '14CfaNb8091RZneIXP02pdBjZu7NttWHcM2NOKQiPgNs';
 define('SERIE_CONFIRMED', 'confirmed');
 define('SERIE_RECOVERED', 'recovered');
-define('SERIE_DEADLY', 'deaths');
+define('SERIE_DEATHS', 'deaths');
 define('SERIE_ACTIVE', 'active');
+define('SERIES_FIRST_VALUE_COL_ID', 4);
 $series = [
     SERIE_CONFIRMED,
     SERIE_RECOVERED,
-    SERIE_DEADLY,
+    SERIE_DEATHS,
 ];
 $countriesWhiteList = [
     'Portugal',
@@ -87,7 +88,6 @@ $mappingRowToId = [];
 $mappingColToId = [];
 $countriesList = [];
 $zero = number_format('0', '8', ',', '');
-$zeroPercent = $zero . '%';
 
 ################################################################################
 function getRowId($name)
@@ -116,13 +116,13 @@ function getColId($name)
 
 function gdataSetCase($value, $rowName = 'head', $colName = null)
 {
-    global $gDataCases, $zero, $zeroPercent;
+    global $gDataCases;
     if (empty($colName)) {
         $colName = $value;
     }
     $rowKey = getRowId($rowName);
     $colKey = getColId($colName);
-    $gDataCases[$rowKey][$colKey] = (!empty($value) && $zero !== $value && $zeroPercent !== $value) ? $value : '';
+    $gDataCases[$rowKey][$colKey] = valueOrEmpty($value);
 }
 
 function gdataGetCase($rowName, $colName)
@@ -131,6 +131,16 @@ function gdataGetCase($rowName, $colName)
     $rowKey = getRowId($rowName);
     $colKey = getColId($colName);
     return $gDataCases[$rowKey][$colKey] ?: 0;
+}
+
+function valueOrEmpty($value)
+{
+    global $zero;
+    $test = str_replace('%', '', $value);
+    if(empty($test) || $zero === $test){
+        return '';
+    }
+    return $value;
 }
 
 ################################################################################
@@ -186,7 +196,7 @@ foreach ($series as $serie) {
     $rowSize = count($row);
 
     # PARSE HEAD
-    for ($colId = 4; $colId < $rowSize; $colId++) {
+    for ($colId = SERIES_FIRST_VALUE_COL_ID; $colId < $rowSize; $colId++) {
         $dates[$colId] = (new DateTime($row[$colId]))->format('Y-m-d');
     }
 
@@ -261,18 +271,18 @@ foreach ($countriesList as $countryKey => $countryData) {
     printf('Count active cases for %s', $countryName);
     $confirmedTotalColId = getColId($countryName . ' ' . SERIE_CONFIRMED . ' ' . 'total');
     $recoveredTotalColId = getColId($countryName . ' ' . SERIE_RECOVERED . ' ' . 'total');
-    $deadlyTotalColId = getColId($countryName . ' ' . SERIE_DEADLY . ' ' . 'total');
+    $deadlyTotalColId = getColId($countryName . ' ' . SERIE_DEATHS . ' ' . 'total');
     $activeColTotalName = $countryName . ' ' . 'active' . ' ' . 'total';
     $recoveredPercentageColName = $countryName . ' ' . SERIE_RECOVERED . ' percent';
-    $deadlyPercentageColName = $countryName . ' ' . SERIE_DEADLY . ' percent';
+    $deadlyPercentageColName = $countryName . ' ' . SERIE_DEATHS . ' percent';
     $activePercentageColName = $countryName . ' ' . SERIE_ACTIVE . ' percent';
     $confirmedDailyColName = $countryName . ' ' . SERIE_CONFIRMED . ' daily';
     $recoveredDailyColName = $countryName . ' ' . SERIE_RECOVERED . ' daily';
-    $deadlyDailyColName = $countryName . ' ' . SERIE_DEADLY . ' daily';
-    $confirmedPopulationColName = $countryName . ' ' . SERIE_CONFIRMED . ' 1M';
-    $recoveredPopulationColName = $countryName . ' ' . SERIE_RECOVERED . ' 1M';
-    $deadlyPopulationColName = $countryName . ' ' . SERIE_DEADLY . ' 1M';
-    $activePopulationColName = $countryName . ' ' . SERIE_ACTIVE . ' 1M';
+    $deadlyDailyColName = $countryName . ' ' . SERIE_DEATHS . ' daily';
+    $confirmedPopulationColName = $countryName . ' ' . SERIE_CONFIRMED . ' in population';
+    $recoveredPopulationColName = $countryName . ' ' . SERIE_RECOVERED . ' in population';
+    $deadlyPopulationColName = $countryName . ' ' . SERIE_DEATHS . ' in population';
+    $activePopulationColName = $countryName . ' ' . SERIE_ACTIVE . ' in population';
     gdataSetCase($activeColTotalName);
     gdataSetCase($recoveredPercentageColName);
     gdataSetCase($deadlyPercentageColName);
@@ -285,6 +295,7 @@ foreach ($countriesList as $countryKey => $countryData) {
     gdataSetCase($deadlyPopulationColName);
     gdataSetCase($activePopulationColName);
     $previousDateRowId = 0;
+    $firstCaseDate = null;
     foreach ($dates as $date) {
         $dateRowId = getRowId($date);
         $confirmedValueToday = gdataGetCase($dateRowId, $confirmedTotalColId);
@@ -293,15 +304,18 @@ foreach ($countriesList as $countryKey => $countryData) {
         $recoveredValueYesterday = ($previousDateRowId > 0) ? gdataGetCase($previousDateRowId, $recoveredTotalColId) : 0;
         $deadlyValueToday = gdataGetCase($dateRowId, $deadlyTotalColId);
         $deadlyValueYesterday = ($previousDateRowId > 0) ? gdataGetCase($previousDateRowId, $deadlyTotalColId) : 0;
+        if (empty($firstCaseDate) && !empty($confirmedValueToday)) {
+            $firstCaseDate = $date;
+        }
         # active
         $activeValueToday = (int)($confirmedValueToday - $recoveredValueToday - $deadlyValueToday);
         gdataSetCase($activeValueToday, $date, $activeColTotalName);
         # percentage
-        $recoveredPercentage = number_format(($confirmedValueToday > 0) ? ($recoveredValueToday / $confirmedValueToday * 100) : 0, '0', ',', '') . '%';
+        $recoveredPercentage = number_format(($confirmedValueToday > 0) ? ($recoveredValueToday / $confirmedValueToday * 100) : 0, '8', ',', '') . '%';
         gdataSetCase($recoveredPercentage, $date, $recoveredPercentageColName);
-        $deadlyPercentage = number_format(($confirmedValueToday > 0) ? ($deadlyValueToday / $confirmedValueToday * 100) : 0, '0', ',', '') . '%';
+        $deadlyPercentage = number_format(($confirmedValueToday > 0) ? ($deadlyValueToday / $confirmedValueToday * 100) : 0, '8', ',', '') . '%';
         gdataSetCase($deadlyPercentage, $date, $deadlyPercentageColName);
-        $activePercentage = number_format(($confirmedValueToday > 0) ? ($activeValueToday / $confirmedValueToday * 100) : 0, '0', ',', '') . '%';
+        $activePercentage = number_format(($confirmedValueToday > 0) ? ($activeValueToday / $confirmedValueToday * 100) : 0, '8', ',', '') . '%';
         gdataSetCase($activePercentage, $date, $activePercentageColName);
         # daily
         $confirmedDailyValue = (int)($confirmedValueToday - $confirmedValueYesterday);
@@ -311,30 +325,36 @@ foreach ($countriesList as $countryKey => $countryData) {
         $deadlyDailyValue = (int)($deadlyValueToday - $deadlyValueYesterday);
         gdataSetCase($deadlyDailyValue, $date, $deadlyDailyColName);
         # population
-        $confirmedPopulationValue = number_format($confirmedValueToday / $populationValue / 100 * 1000000, '8', ',', '');
+        $confirmedPopulationValue = number_format($confirmedValueToday / $populationValue * 100, '8', ',', '') . '%';
         gdataSetCase($confirmedPopulationValue, $date, $confirmedPopulationColName);
-        $recoveredPopulationValue = number_format($recoveredValueToday / $populationValue / 100 * 1000000, '8', ',', '');
+        $recoveredPopulationValue = number_format($recoveredValueToday / $populationValue * 100, '8', ',', '') . '%';
         gdataSetCase($recoveredPopulationValue, $date, $recoveredPopulationColName);
-        $deadlyPopulationValue = number_format($deadlyValueToday / $populationValue / 100 * 1000000, '8', ',', '');
+        $deadlyPopulationValue = number_format($deadlyValueToday / $populationValue * 100, '8', ',', '') . '%';
         gdataSetCase($deadlyPopulationValue, $date, $deadlyPopulationColName);
-        $activePopulationValue = number_format($activeValueToday / $populationValue / 100 * 1000000, '8', ',', '');
+        $activePopulationValue = number_format($activeValueToday / $populationValue * 100, '8', ',', '') . '%';
         gdataSetCase($activePopulationValue, $date, $activePopulationColName);
         $previousDateRowId = $dateRowId;
     }
-    $countriesList[$countryKey]['confirmed total'] = !empty($confirmedValueToday) ? $confirmedValueToday : '';
-    $countriesList[$countryKey]['recovered total'] = !empty($recoveredValueToday) ? $recoveredValueToday : '';
-    $countriesList[$countryKey]['deadly total'] = !empty($deadlyValueToday) ? $deadlyValueToday : '';
-    $countriesList[$countryKey]['active total'] = !empty($activeValueToday) ? $activeValueToday : '';
-    $countriesList[$countryKey]['confirmed 1M'] = !empty($confirmedPopulationValue) && $zero !== $confirmedPopulationValue ? $confirmedPopulationValue : '';
-    $countriesList[$countryKey]['recovered 1M'] = !empty($recoveredPopulationValue) && $zero !== $recoveredPopulationValue ? $recoveredPopulationValue : '';
-    $countriesList[$countryKey]['deadly 1M'] = !empty($deadlyPopulationValue) && $zero !== $deadlyPopulationValue ? $deadlyPopulationValue : '';
-    $countriesList[$countryKey]['active 1M'] = !empty($activePopulationValue) && $zero !== $activePopulationValue ? $activePopulationValue : '';
+    $countriesList[$countryKey]['confirmed total'] = valueOrEmpty($confirmedValueToday);
+    $countriesList[$countryKey]['recovered total'] = valueOrEmpty($recoveredValueToday);
+    $countriesList[$countryKey]['deaths total'] = valueOrEmpty($deadlyValueToday);
+    $countriesList[$countryKey]['active total'] = valueOrEmpty($activeValueToday);
+    $countriesList[$countryKey]['recovered percent'] = valueOrEmpty($recoveredPercentage);
+    $countriesList[$countryKey]['deaths percent'] = valueOrEmpty($deadlyPercentage);
+    $countriesList[$countryKey]['active percent'] = valueOrEmpty($activePercentage);
+    $countriesList[$countryKey]['confirmed in population'] = valueOrEmpty($confirmedPopulationValue);
+    $countriesList[$countryKey]['recovered in population'] = valueOrEmpty($recoveredPopulationValue);
+    $countriesList[$countryKey]['deaths in population'] = valueOrEmpty($deadlyPopulationValue);
+    $countriesList[$countryKey]['active in population'] = valueOrEmpty($activePopulationValue);
+    $countriesList[$countryKey]['updated at'] = $date;
+    $countriesList[$countryKey]['first case date'] = $firstCaseDate;
     printf(' [OK]' . PHP_EOL);
 }
 
 printf('Recalculate countries');
 $gDataCountriesList = [];
 $header = [];
+//$europe = [];
 foreach ($countriesList as $countryData) {
     if (empty($header)) {
         foreach ($countryData as $colName => $value) {
@@ -343,11 +363,28 @@ foreach ($countriesList as $countryData) {
         $gDataCountriesList[] = $header;
     }
     $row = [];
-    foreach ($countryData as $value) {
+    foreach ($countryData as $key => $value) {
         $row[] = $value;
+//        if(!isset($europe[$key])){
+//            $europe[$key] = 0;
+//        }
+//        $europe[$key] += $value;
     }
     $gDataCountriesList[] = $row;
 }
+//$row = [];
+//$europe['name'] = 'Europe';
+//$europe['recovered percent'] = number_format(($europe['confirmed total'] > 0) ? ($europe['recovered total'] / $europe['confirmed total'] * 100) : 0, '8', ',', '') . '%';
+//$europe['deaths percent'] = number_format(($europe['confirmed total'] > 0) ? ($europe['deaths total'] / $europe['confirmed total'] * 100) : 0, '8', ',', '') . '%';
+//$europe['active percent'] = number_format(($europe['confirmed total'] > 0) ? ($europe['active total'] / $europe['confirmed total'] * 100) : 0, '8', ',', '') . '%';
+//$europe['confirmed in population'] = number_format($europe['confirmed total'] / $europe['population'] * 100, '8', ',', '') . '%';
+//$europe['recovered in population'] = number_format($europe['recovered total'] / $europe['population'] * 100, '8', ',', '') . '%';
+//$europe['deaths in population'] = number_format($europe['deaths total'] / $europe['population'] * 100, '8', ',', '') . '%';
+//$europe['active in population'] = number_format($europe['active total'] / $europe['population'] * 100, '8', ',', '') . '%';
+//foreach ($europe as $value) {
+//    $row[] = $value;
+//}
+//$gDataCountriesList[] = $row;
 printf(' [OK]' . PHP_EOL);
 
 
