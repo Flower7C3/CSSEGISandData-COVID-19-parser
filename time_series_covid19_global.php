@@ -137,7 +137,7 @@ function valueOrEmpty($value)
 {
     global $zero;
     $test = str_replace('%', '', $value);
-    if(empty($test) || $zero === $test){
+    if (empty($test) || $zero === $test) {
         return '';
     }
     return $value;
