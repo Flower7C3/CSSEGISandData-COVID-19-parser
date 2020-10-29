@@ -77,7 +77,6 @@ $countriesWhiteList = [
 //    'Turkey',
 //    'Russia',
 ];
-$sourceFileNamePattern = "data/time_series_covid19_%s_global.csv";
 
 ################################################################################
 # DATA
@@ -145,57 +144,69 @@ function valueOrEmpty($value)
 
 function getCellValue($rowData, $colNameToId, $colName)
 {
-    if (empty($colNameToId[$colName]) || empty($rowData[$colNameToId[$colName]])) {
+    if (!isset($colNameToId[$colName], $rowData[$colNameToId[$colName]])) {
         return null;
     }
     return trim($rowData[$colNameToId[$colName]]);
+}
+
+function parseCsvFile($filename)
+{
+    $stream = file_get_contents('data/' . $filename);
+    $rows = explode("\n", $stream);
+    $row = str_getcsv($rows[0]);
+    $colNameToId = [];
+    # PARSE HEAD
+    foreach ($row as $colId => $colName) {
+        $colName = trim($colName);
+        $colNameToId[$colName] = $colId;
+    }
+    unset($rows[0]);
+    return [$rows, $colNameToId];
+}
+
+function isCountryOnWhiteList($countryName)
+{
+    global $countriesWhiteList;
+    return !(empty($countryName) || !(!empty($countriesWhiteList) && in_array($countryName, $countriesWhiteList, true)));
+}
+
+function formatPercent($number)
+{
+    return number_format($number, 12, ',', '') . '%';
 }
 
 ################################################################################
 # PROCESS COUNTRIES
 ################################################################################
 printf('Parse countries');
-$stream = file_get_contents('data/UID_ISO_FIPS_LookUp_Table.csv');
-$rows = explode("\n", $stream);
-$rowsCount = count($rows);
-$row = str_getcsv($rows[0]);
-$rowSize = count($row);
-$colNameToId = [];
-# PARSE HEAD
-for ($colId = 0; $colId < $rowSize; $colId++) {
-    $value = trim($row[$colId]);
-    $colNameToId[$value] = $colId;
-}
+list($rows, $colNameToId) = parseCsvFile('UID_ISO_FIPS_LookUp_Table.csv');
 # PARSE ROWS
-for ($rowId = 1; $rowId < $rowsCount; $rowId++) {
-    $rowData = str_getcsv($rows[$rowId]);
+foreach ($rows as $row) {
+    $rowData = str_getcsv($row);
     $nameValue = getCellValue($rowData, $colNameToId, 'Combined_Key');
-    if (
-        empty($nameValue)
-        ||
-        (!empty($countriesWhiteList) && !in_array($nameValue, $countriesWhiteList, true))
-    ) {
+    if (!isCountryOnWhiteList($nameValue)) {
         continue;
     }
     $countriesList[$nameValue] = [
         'name' => $nameValue,
         'population' => (int)getCellValue($rowData, $colNameToId, 'Population'),
-        'confirmed total' => null,
-        'recovered total' => null,
-        'deaths total' => null,
-        'active total' => null,
-        'recovered percent' => null,
-        'deaths percent' => null,
-        'active percent' => null,
-        'confirmed in population' => null,
-        'recovered in population' => null,
-        'deaths in population' => null,
-        'active in population' => null,
-        'first case at' => null,
-        'last update at' => null,
+        'confirmed total' => '',
+        'recovered total' => '',
+        'deaths total' => '',
+        'active total' => '',
+        'recovered percent' => '',
+        'deaths percent (mortality rate)' => '',
+        'active percent' => '',
+        'confirmed in population (incident rate)' => '',
+        'recovered in population' => '',
+        'deaths in population' => '',
+        'active in population' => '',
+        'people tested' => '',
+        'people hospitalized' => '',
+        'first case at' => '',
+        'last update at' => '',
         'updated at' => date('Y-m-d H:i:s'),
-        'incidence rate' => null,
-        'case-fatality ratio' => null,
     ];
 }
 printf(' [OK]' . PHP_EOL);
@@ -204,35 +215,32 @@ printf(' [OK]' . PHP_EOL);
 # PROCESS COUNTRIES
 ################################################################################
 printf('Parse daily report');
-$stream = file_get_contents('data/daily_reports.csv');
-$rows = explode("\n", $stream);
-$rowsCount = count($rows);
-$row = str_getcsv($rows[0]);
-$rowSize = count($row);
-$colNameToId = [];
-# PARSE HEAD
-for ($colId = 0; $colId < $rowSize; $colId++) {
-    $value = trim($row[$colId]);
-    $colNameToId[$value] = $colId;
-}
-# PARSE ROWS
-for ($rowId = 1; $rowId < $rowsCount; $rowId++) {
-    $rowData = str_getcsv($rows[$rowId]);
+list($rows, $colNameToId) = parseCsvFile('cases_country.csv');
+foreach ($rows as $row) {
+    $rowData = str_getcsv($row);
     $nameValue = getCellValue($rowData, $colNameToId, 'Country_Region');
-    if (
-        empty($nameValue)
-        ||
-        (!empty($countriesWhiteList) && !in_array($nameValue, $countriesWhiteList, true))
-    ) {
+    if (!isCountryOnWhiteList($nameValue)) {
         continue;
     }
+    # date
     $countriesList[$nameValue]['last update at'] = getCellValue($rowData, $colNameToId, 'Last_Update');
-    $countriesList[$nameValue]['confirmed total'] += getCellValue($rowData, $colNameToId, 'Confirmed');
-    $countriesList[$nameValue]['recovered total'] += getCellValue($rowData, $colNameToId, 'Recovered');
-    $countriesList[$nameValue]['deaths total'] += getCellValue($rowData, $colNameToId, 'Deaths');
-    $countriesList[$nameValue]['active total'] = getCellValue($rowData, $colNameToId, 'Active');
-//    $countriesList[$nameValue]['incidence rate'] = str_replace('.', '.', getCellValue($rowData, $colNameToId, 'Incidence_Rate'));
-//    $countriesList[$nameValue]['case-fatality ratio'] = str_replace('.', '.', getCellValue($rowData, $colNameToId, 'Case-Fatality_Ratio'));
+    # values
+    $countriesList[$nameValue]['confirmed total'] = (int)getCellValue($rowData, $colNameToId, 'Confirmed');
+    $countriesList[$nameValue]['recovered total'] = (int)getCellValue($rowData, $colNameToId, 'Recovered');
+    $countriesList[$nameValue]['deaths total'] = (int)getCellValue($rowData, $colNameToId, 'Deaths');
+    $countriesList[$nameValue]['active total'] = (int)getCellValue($rowData, $colNameToId, 'Active');
+    # percentage of active
+    $countriesList[$nameValue]['recovered percent'] = formatPercent(($countriesList[$nameValue]['active total'] > 0) ? ($countriesList[$nameValue]['recovered total'] / $countriesList[$nameValue]['confirmed total'] * 100) : 0);
+    $countriesList[$nameValue]['deaths percent (mortality rate)'] = formatPercent(getCellValue($rowData, $colNameToId, 'Mortality_Rate'));
+    $countriesList[$nameValue]['active percent'] = formatPercent(($countriesList[$nameValue]['active total'] > 0) ? ($countriesList[$nameValue]['active total'] / $countriesList[$nameValue]['confirmed total'] * 100) : 0);
+    # percentage of population
+    $countriesList[$nameValue]['confirmed in population (incident rate)'] = formatPercent(getCellValue($rowData, $colNameToId, 'Incident_Rate') / 1000);
+    $countriesList[$nameValue]['recovered in population'] = formatPercent($countriesList[$nameValue]['recovered total'] / $countriesList[$nameValue]['population'] * 100);
+    $countriesList[$nameValue]['deaths in population'] = formatPercent($countriesList[$nameValue]['deaths total'] / $countriesList[$nameValue]['population'] * 100);
+    $countriesList[$nameValue]['active in population'] = formatPercent($countriesList[$nameValue]['active total'] / $countriesList[$nameValue]['population'] * 100);
+    # other
+    $countriesList[$nameValue]['people tested'] = getCellValue($rowData, $colNameToId, 'People_Tested');
+    $countriesList[$nameValue]['people hospitalized'] = getCellValue($rowData, $colNameToId, 'People_Hospitalized');
 }
 printf(' [OK]' . PHP_EOL);
 
@@ -241,62 +249,39 @@ printf(' [OK]' . PHP_EOL);
 ################################################################################
 foreach ($series as $serie) {
     printf('Parse %s cases', $serie);
-    $sourceFileName = sprintf($sourceFileNamePattern, $serie);
-
     $countriesCases = [];
-
-    # READ INPUT
-    $stream = file_get_contents($sourceFileName);
-    $rows = explode("\n", $stream);
-    $rowsCount = count($rows);
-    $row = str_getcsv($rows[0]);
-    $rowSize = count($row);
-
-    # PARSE HEAD
-    for ($colId = SERIES_FIRST_VALUE_COL_ID; $colId < $rowSize; $colId++) {
-        $dates[$colId] = (new DateTime($row[$colId]))->format('Y-m-d');
+    $sourceFileName = sprintf("time_series_covid19_%s_global.csv", $serie);
+    list($rows, $colNameToId) = parseCsvFile($sourceFileName);
+    foreach ($colNameToId as $colName => $colId) {
+        if ($colId >= SERIES_FIRST_VALUE_COL_ID) {
+            $dates[$colId] = (new DateTime($colName))->format('Y-m-d');
+        }
     }
 
     # PARSE ROWS
-    for ($rowId = 1; $rowId < $rowsCount; $rowId++) {
-        $row = str_getcsv($rows[$rowId]);
-        $rowSize = count($row);
-        if (empty($rowSize)) {
-            continue;
-        }
-        list($regionName, $countryName) = $row;
+    foreach ($rows as $row) {
+        $rowData = str_getcsv($row);
+        $nameValue = getCellValue($rowData, $colNameToId, 'Country/Region');
         $countryCases = [];
-        $name = '';
-        if (!empty($countryName)) {
-            $name = $countryName;
+        if (isset($countriesCases[$nameValue])) {
+            $countryCases = $countriesCases[$nameValue];
         }
-        if (!empty($regionName)) {
-            $name = $regionName;
-            if (!empty($countryName)) {
-                $name .= ' in ' . $countryName . '';
-            }
-        }
-        if (isset($countriesCases[$name])) {
-            $countryCases = $countriesCases[$name];
-        }
-        if (
-            empty($name)
-            ||
-            (!empty($countriesWhiteList) && !array_key_exists($name, $countriesList))
-        ) {
+        if (!isCountryOnWhiteList($nameValue)) {
             continue;
         }
 
         # PARSE COLUMNS
-        for ($colId = 4; $colId < $rowSize; $colId++) {
-            $date = $dates[$colId];
-            $value = $row[$colId];
-            if (isset($countriesCases[$name][$date])) {
-                $value += $countriesCases[$name][$date];
+        foreach ($rowData as $colId => $cellValue) {
+            if ($colId >= SERIES_FIRST_VALUE_COL_ID) {
+                $date = $dates[$colId];
+                $value = $rowData[$colId];
+                if (isset($countriesCases[$nameValue][$date])) {
+                    $value += $countriesCases[$nameValue][$date];
+                }
+                $countryCases[$date] = $value;
             }
-            $countryCases[$date] = $value;
         }
-        $countriesCases[$name] = $countryCases;
+        $countriesCases[$nameValue] = $countryCases;
     }
 
     # PREPARE OUTPUT
@@ -368,11 +353,11 @@ foreach ($countriesList as $countryKey => $countryData) {
         $activeValueToday = (int)($confirmedValueToday - $recoveredValueToday - $deadlyValueToday);
         gdataSetCase($activeValueToday, $date, $activeColTotalName);
         # percentage
-        $recoveredPercentage = number_format(($confirmedValueToday > 0) ? ($recoveredValueToday / $confirmedValueToday * 100) : 0, '8', ',', '') . '%';
+        $recoveredPercentage = formatPercent(($confirmedValueToday > 0) ? ($recoveredValueToday / $confirmedValueToday * 100) : 0);
         gdataSetCase($recoveredPercentage, $date, $recoveredPercentageColName);
-        $deadlyPercentage = number_format(($confirmedValueToday > 0) ? ($deadlyValueToday / $confirmedValueToday * 100) : 0, '8', ',', '') . '%';
+        $deadlyPercentage = formatPercent(($confirmedValueToday > 0) ? ($deadlyValueToday / $confirmedValueToday * 100) : 0);
         gdataSetCase($deadlyPercentage, $date, $deadlyPercentageColName);
-        $activePercentage = number_format(($confirmedValueToday > 0) ? ($activeValueToday / $confirmedValueToday * 100) : 0, '8', ',', '') . '%';
+        $activePercentage = formatPercent(($confirmedValueToday > 0) ? ($activeValueToday / $confirmedValueToday * 100) : 0);
         gdataSetCase($activePercentage, $date, $activePercentageColName);
         # daily
         $confirmedDailyValue = (int)($confirmedValueToday - $confirmedValueYesterday);
@@ -382,27 +367,16 @@ foreach ($countriesList as $countryKey => $countryData) {
         $deadlyDailyValue = (int)($deadlyValueToday - $deadlyValueYesterday);
         gdataSetCase($deadlyDailyValue, $date, $deadlyDailyColName);
         # population
-        $confirmedPopulationValue = number_format($confirmedValueToday / $populationValue * 100, '8', ',', '') . '%';
+        $confirmedPopulationValue = formatPercent($confirmedValueToday / $populationValue * 100);
         gdataSetCase($confirmedPopulationValue, $date, $confirmedPopulationColName);
-        $recoveredPopulationValue = number_format($recoveredValueToday / $populationValue * 100, '8', ',', '') . '%';
+        $recoveredPopulationValue = formatPercent($recoveredValueToday / $populationValue * 100);
         gdataSetCase($recoveredPopulationValue, $date, $recoveredPopulationColName);
-        $deadlyPopulationValue = number_format($deadlyValueToday / $populationValue * 100, '8', ',', '') . '%';
+        $deadlyPopulationValue = formatPercent($deadlyValueToday / $populationValue * 100);
         gdataSetCase($deadlyPopulationValue, $date, $deadlyPopulationColName);
-        $activePopulationValue = number_format($activeValueToday / $populationValue * 100, '8', ',', '') . '%';
+        $activePopulationValue = formatPercent($activeValueToday / $populationValue * 100);
         gdataSetCase($activePopulationValue, $date, $activePopulationColName);
         $previousDateRowId = $dateRowId;
     }
-    $countriesList[$countryKey]['confirmed total'] = valueOrEmpty($confirmedValueToday);
-    $countriesList[$countryKey]['recovered total'] = valueOrEmpty($recoveredValueToday);
-    $countriesList[$countryKey]['deaths total'] = valueOrEmpty($deadlyValueToday);
-    $countriesList[$countryKey]['active total'] = valueOrEmpty($activeValueToday);
-    $countriesList[$countryKey]['recovered percent'] = valueOrEmpty($recoveredPercentage);
-    $countriesList[$countryKey]['deaths percent'] = valueOrEmpty($deadlyPercentage);
-    $countriesList[$countryKey]['active percent'] = valueOrEmpty($activePercentage);
-    $countriesList[$countryKey]['confirmed in population'] = valueOrEmpty($confirmedPopulationValue);
-    $countriesList[$countryKey]['recovered in population'] = valueOrEmpty($recoveredPopulationValue);
-    $countriesList[$countryKey]['deaths in population'] = valueOrEmpty($deadlyPopulationValue);
-    $countriesList[$countryKey]['active in population'] = valueOrEmpty($activePopulationValue);
     $countriesList[$countryKey]['first case at'] = $firstCaseDate;
     printf(' [OK]' . PHP_EOL);
 }
