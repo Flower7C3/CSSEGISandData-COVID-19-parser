@@ -28,9 +28,9 @@ download_file "master/csse_covid_19_data/UID_ISO_FIPS_LookUp_Table.csv" "data/UI
 download_file "web-data/data/cases_country.csv" "data/cases_country.csv"
 
 if [[ "Darwin" == "$(uname)" ]]; then
-    php time_series_covid19_global.php
+    php CSSEGISandData-COVID-19-parse.php
 else
-    php74 time_series_covid19_global.php
+    php74 CSSEGISandData-COVID-19-parse.php
 fi
 
 echo "Done :)"
