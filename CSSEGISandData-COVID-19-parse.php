@@ -249,8 +249,7 @@ printf(' [OK]' . PHP_EOL);
 foreach ($series as $serie) {
     printf('Parse %s cases', $serie);
     $countriesCases = [];
-    $sourceFileName = sprintf("time_series_covid19_%s_global.csv", $serie);
-    list($rows, $colNameToId) = parseCsvFile($sourceFileName);
+    list($rows, $colNameToId) = parseCsvFile(sprintf("time_series_%s_global.csv", $serie));
     foreach ($colNameToId as $colName => $colId) {
         if ($colId >= SERIES_FIRST_VALUE_COL_ID) {
             $dates[$colId] = (new DateTime($colName))->format('Y-m-d');
