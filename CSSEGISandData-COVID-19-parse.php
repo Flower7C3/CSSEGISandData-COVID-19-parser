@@ -206,7 +206,6 @@ foreach ($rows as $row) {
         'people hospitalized' => '',
         'first case at' => '',
         'last update at' => '',
-        'updated at' => date('Y-m-d H:i:s'),
     ];
 }
 printf(' [OK]' . PHP_EOL);
@@ -223,7 +222,7 @@ foreach ($rows as $row) {
         continue;
     }
     # date
-    $countriesList[$nameValue]['last update at'] = getCellValue($rowData, $colNameToId, 'Last_Update');
+    $countriesList[$nameValue]['last update at'] = (new DateTime(getCellValue($rowData, $colNameToId, 'Last_Update'), new DateTimeZone('UTC')))->format('r');
     # values
     $countriesList[$nameValue]['confirmed total'] = (int)getCellValue($rowData, $colNameToId, 'Confirmed');
     $countriesList[$nameValue]['recovered total'] = (int)getCellValue($rowData, $colNameToId, 'Recovered');
