@@ -25,6 +25,8 @@ for serie in "${series[@]}"; do
 done
 countries_file_name="UID_ISO_FIPS_LookUp_Table.csv"
 download_file "$countries_file_name" "data/${countries_file_name}"
+daily_reports_file_name="csse_covid_19_daily_reports/$(date -v-1d +%m-%d-%Y).csv"
+download_file "$daily_reports_file_name" "data/daily_reports.csv"
 
 if [[ "Darwin" == "$(uname)" ]]; then
     php time_series_covid19_global.php

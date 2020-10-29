@@ -143,6 +143,14 @@ function valueOrEmpty($value)
     return $value;
 }
 
+function getCellValue($rowData, $colNameToId, $colName)
+{
+    if (empty($colNameToId[$colName]) || empty($rowData[$colNameToId[$colName]])) {
+        return null;
+    }
+    return trim($rowData[$colNameToId[$colName]]);
+}
+
 ################################################################################
 # PROCESS COUNTRIES
 ################################################################################
@@ -161,10 +169,7 @@ for ($colId = 0; $colId < $rowSize; $colId++) {
 # PARSE ROWS
 for ($rowId = 1; $rowId < $rowsCount; $rowId++) {
     $rowData = str_getcsv($rows[$rowId]);
-    $nameColId = $colNameToId['Combined_Key'];
-    $nameValue = trim($rowData[$nameColId]);
-    $populationColId = $colNameToId['Population'];
-    $populationValue = trim($rowData[$populationColId]);
+    $nameValue = getCellValue($rowData, $colNameToId, 'Combined_Key');
     if (
         empty($nameValue)
         ||
@@ -174,8 +179,60 @@ for ($rowId = 1; $rowId < $rowsCount; $rowId++) {
     }
     $countriesList[$nameValue] = [
         'name' => $nameValue,
-        'population' => (int)$populationValue,
+        'population' => (int)getCellValue($rowData, $colNameToId, 'Population'),
+        'confirmed total' => null,
+        'recovered total' => null,
+        'deaths total' => null,
+        'active total' => null,
+        'recovered percent' => null,
+        'deaths percent' => null,
+        'active percent' => null,
+        'confirmed in population' => null,
+        'recovered in population' => null,
+        'deaths in population' => null,
+        'active in population' => null,
+        'first case at' => null,
+        'last update at' => null,
+        'updated at' => date('Y-m-d H:i:s'),
+        'incidence rate' => null,
+        'case-fatality ratio' => null,
     ];
+}
+printf(' [OK]' . PHP_EOL);
+
+################################################################################
+# PROCESS COUNTRIES
+################################################################################
+printf('Parse daily report');
+$stream = file_get_contents('data/daily_reports.csv');
+$rows = explode("\n", $stream);
+$rowsCount = count($rows);
+$row = str_getcsv($rows[0]);
+$rowSize = count($row);
+$colNameToId = [];
+# PARSE HEAD
+for ($colId = 0; $colId < $rowSize; $colId++) {
+    $value = trim($row[$colId]);
+    $colNameToId[$value] = $colId;
+}
+# PARSE ROWS
+for ($rowId = 1; $rowId < $rowsCount; $rowId++) {
+    $rowData = str_getcsv($rows[$rowId]);
+    $nameValue = getCellValue($rowData, $colNameToId, 'Country_Region');
+    if (
+        empty($nameValue)
+        ||
+        (!empty($countriesWhiteList) && !in_array($nameValue, $countriesWhiteList, true))
+    ) {
+        continue;
+    }
+    $countriesList[$nameValue]['last update at'] = getCellValue($rowData, $colNameToId, 'Last_Update');
+    $countriesList[$nameValue]['confirmed total'] += getCellValue($rowData, $colNameToId, 'Confirmed');
+    $countriesList[$nameValue]['recovered total'] += getCellValue($rowData, $colNameToId, 'Recovered');
+    $countriesList[$nameValue]['deaths total'] += getCellValue($rowData, $colNameToId, 'Deaths');
+    $countriesList[$nameValue]['active total'] = getCellValue($rowData, $colNameToId, 'Active');
+//    $countriesList[$nameValue]['incidence rate'] = str_replace('.', '.', getCellValue($rowData, $colNameToId, 'Incidence_Rate'));
+//    $countriesList[$nameValue]['case-fatality ratio'] = str_replace('.', '.', getCellValue($rowData, $colNameToId, 'Case-Fatality_Ratio'));
 }
 printf(' [OK]' . PHP_EOL);
 
@@ -346,8 +403,7 @@ foreach ($countriesList as $countryKey => $countryData) {
     $countriesList[$countryKey]['recovered in population'] = valueOrEmpty($recoveredPopulationValue);
     $countriesList[$countryKey]['deaths in population'] = valueOrEmpty($deadlyPopulationValue);
     $countriesList[$countryKey]['active in population'] = valueOrEmpty($activePopulationValue);
-    $countriesList[$countryKey]['updated at'] = $date;
-    $countriesList[$countryKey]['first case date'] = $firstCaseDate;
+    $countriesList[$countryKey]['first case at'] = $firstCaseDate;
     printf(' [OK]' . PHP_EOL);
 }
 
