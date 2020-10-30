@@ -145,7 +145,7 @@ function valueOrEmpty($value)
 function getCellValue($rowData, $colNameToId, $colName)
 {
     if (!isset($colNameToId[$colName], $rowData[$colNameToId[$colName]])) {
-        return null;
+        return '';
     }
     return trim($rowData[$colNameToId[$colName]]);
 }
@@ -171,9 +171,19 @@ function isCountryOnWhiteList($countryName)
     return !(empty($countryName) || !(!empty($countriesWhiteList) && in_array($countryName, $countriesWhiteList, true)));
 }
 
+function formatInt($number)
+{
+    return (int)$number;
+}
+
+function formatFloat($number, $suffix = '')
+{
+    return number_format($number, 12, ',', '') . $suffix;
+}
+
 function formatPercent($number)
 {
-    return number_format($number, 12, ',', '') . '%';
+    return formatFloat($number, '%');
 }
 
 ################################################################################
@@ -190,7 +200,7 @@ foreach ($rows as $row) {
     }
     $countriesList[$nameValue] = [
         'name' => $nameValue,
-        'population' => (int)getCellValue($rowData, $colNameToId, 'Population'),
+        'population' => formatInt(getCellValue($rowData, $colNameToId, 'Population')),
         'confirmed total' => '',
         'recovered total' => '',
         'deaths total' => '',
@@ -198,10 +208,12 @@ foreach ($rows as $row) {
         'recovered percent' => '',
         'deaths percent (mortality rate)' => '',
         'active percent' => '',
-        'confirmed in population (incident rate)' => '',
+        'confirmed in population' => '',
         'recovered in population' => '',
         'deaths in population' => '',
         'active in population' => '',
+        'incident rate' => '',
+        'active 1 of n' => '',
         'people tested' => '',
         'people hospitalized' => '',
         'first case at' => '',
@@ -224,19 +236,21 @@ foreach ($rows as $row) {
     # date
     $countriesList[$nameValue]['last update at'] = (new DateTime(getCellValue($rowData, $colNameToId, 'Last_Update'), new DateTimeZone('UTC')))->format('r');
     # values
-    $countriesList[$nameValue]['confirmed total'] = (int)getCellValue($rowData, $colNameToId, 'Confirmed');
-    $countriesList[$nameValue]['recovered total'] = (int)getCellValue($rowData, $colNameToId, 'Recovered');
-    $countriesList[$nameValue]['deaths total'] = (int)getCellValue($rowData, $colNameToId, 'Deaths');
-    $countriesList[$nameValue]['active total'] = (int)getCellValue($rowData, $colNameToId, 'Active');
+    $countriesList[$nameValue]['confirmed total'] = formatInt(getCellValue($rowData, $colNameToId, 'Confirmed'));
+    $countriesList[$nameValue]['recovered total'] = formatInt(getCellValue($rowData, $colNameToId, 'Recovered'));
+    $countriesList[$nameValue]['deaths total'] = formatInt(getCellValue($rowData, $colNameToId, 'Deaths'));
+    $countriesList[$nameValue]['active total'] = formatInt(getCellValue($rowData, $colNameToId, 'Active'));
     # percentage of active
     $countriesList[$nameValue]['recovered percent'] = formatPercent(($countriesList[$nameValue]['active total'] > 0) ? ($countriesList[$nameValue]['recovered total'] / $countriesList[$nameValue]['confirmed total'] * 100) : 0);
     $countriesList[$nameValue]['deaths percent (mortality rate)'] = formatPercent(getCellValue($rowData, $colNameToId, 'Mortality_Rate'));
     $countriesList[$nameValue]['active percent'] = formatPercent(($countriesList[$nameValue]['active total'] > 0) ? ($countriesList[$nameValue]['active total'] / $countriesList[$nameValue]['confirmed total'] * 100) : 0);
     # percentage of population
-    $countriesList[$nameValue]['confirmed in population (incident rate)'] = formatPercent(getCellValue($rowData, $colNameToId, 'Incident_Rate') / 1000);
+    $countriesList[$nameValue]['incident rate'] = formatFloat(getCellValue($rowData, $colNameToId, 'Incident_Rate'));
+    $countriesList[$nameValue]['confirmed in population'] = formatPercent($countriesList[$nameValue]['incident rate'] / 1000);
     $countriesList[$nameValue]['recovered in population'] = formatPercent($countriesList[$nameValue]['recovered total'] / $countriesList[$nameValue]['population'] * 100);
     $countriesList[$nameValue]['deaths in population'] = formatPercent($countriesList[$nameValue]['deaths total'] / $countriesList[$nameValue]['population'] * 100);
     $countriesList[$nameValue]['active in population'] = formatPercent($countriesList[$nameValue]['active total'] / $countriesList[$nameValue]['population'] * 100);
+    $countriesList[$nameValue]['active 1 of n'] = $countriesList[$nameValue]['population'] / $countriesList[$nameValue]['active total'];
     # other
     $countriesList[$nameValue]['people tested'] = getCellValue($rowData, $colNameToId, 'People_Tested');
     $countriesList[$nameValue]['people hospitalized'] = getCellValue($rowData, $colNameToId, 'People_Hospitalized');
@@ -335,7 +349,7 @@ foreach ($countriesList as $countryKey => $countryData) {
     gdataSetCase($deadlyPopulationColName);
     gdataSetCase($activePopulationColName);
     $previousDateRowId = 0;
-    $firstCaseDate = null;
+    $firstCaseDate = '';
     foreach ($dates as $date) {
         $dateRowId = getRowId($date);
         $confirmedValueToday = gdataGetCase($dateRowId, $confirmedTotalColId);
@@ -348,7 +362,7 @@ foreach ($countriesList as $countryKey => $countryData) {
             $firstCaseDate = $date;
         }
         # active
-        $activeValueToday = (int)($confirmedValueToday - $recoveredValueToday - $deadlyValueToday);
+        $activeValueToday = formatInt($confirmedValueToday - $recoveredValueToday - $deadlyValueToday);
         gdataSetCase($activeValueToday, $date, $activeColTotalName);
         # percentage
         $recoveredPercentage = formatPercent(($confirmedValueToday > 0) ? ($recoveredValueToday / $confirmedValueToday * 100) : 0);
@@ -358,11 +372,11 @@ foreach ($countriesList as $countryKey => $countryData) {
         $activePercentage = formatPercent(($confirmedValueToday > 0) ? ($activeValueToday / $confirmedValueToday * 100) : 0);
         gdataSetCase($activePercentage, $date, $activePercentageColName);
         # daily
-        $confirmedDailyValue = (int)($confirmedValueToday - $confirmedValueYesterday);
+        $confirmedDailyValue = formatInt($confirmedValueToday - $confirmedValueYesterday);
         gdataSetCase($confirmedDailyValue, $date, $confirmedDailyColName);
-        $recoveredDailyValue = (int)($recoveredValueToday - $recoveredValueYesterday);
+        $recoveredDailyValue = formatInt($recoveredValueToday - $recoveredValueYesterday);
         gdataSetCase($recoveredDailyValue, $date, $recoveredDailyColName);
-        $deadlyDailyValue = (int)($deadlyValueToday - $deadlyValueYesterday);
+        $deadlyDailyValue = formatInt($deadlyValueToday - $deadlyValueYesterday);
         gdataSetCase($deadlyDailyValue, $date, $deadlyDailyColName);
         # population
         $confirmedPopulationValue = formatPercent($confirmedValueToday / $populationValue * 100);
@@ -402,13 +416,13 @@ foreach ($countriesList as $countryData) {
 }
 //$row = [];
 //$europe['name'] = 'Europe';
-//$europe['recovered percent'] = number_format(($europe['confirmed total'] > 0) ? ($europe['recovered total'] / $europe['confirmed total'] * 100) : 0, '8', ',', '') . '%';
-//$europe['deaths percent'] = number_format(($europe['confirmed total'] > 0) ? ($europe['deaths total'] / $europe['confirmed total'] * 100) : 0, '8', ',', '') . '%';
-//$europe['active percent'] = number_format(($europe['confirmed total'] > 0) ? ($europe['active total'] / $europe['confirmed total'] * 100) : 0, '8', ',', '') . '%';
-//$europe['confirmed in population'] = number_format($europe['confirmed total'] / $europe['population'] * 100, '8', ',', '') . '%';
-//$europe['recovered in population'] = number_format($europe['recovered total'] / $europe['population'] * 100, '8', ',', '') . '%';
-//$europe['deaths in population'] = number_format($europe['deaths total'] / $europe['population'] * 100, '8', ',', '') . '%';
-//$europe['active in population'] = number_format($europe['active total'] / $europe['population'] * 100, '8', ',', '') . '%';
+//$europe['recovered percent'] = formatPercent(($europe['confirmed total'] > 0) ? ($europe['recovered total'] / $europe['confirmed total'] * 100) : 0);
+//$europe['deaths percent'] = formatPercent(($europe['confirmed total'] > 0) ? ($europe['deaths total'] / $europe['confirmed total'] * 100) : 0);
+//$europe['active percent'] = formatPercent(($europe['confirmed total'] > 0) ? ($europe['active total'] / $europe['confirmed total'] * 100) : 0);
+//$europe['confirmed in population'] = formatPercent($europe['confirmed total'] / $europe['population'] * 100);
+//$europe['recovered in population'] = formatPercent($europe['recovered total'] / $europe['population'] * 100);
+//$europe['deaths in population'] = formatPercent($europe['deaths total'] / $europe['population'] * 100);
+//$europe['active in population'] = formatPercent($europe['active total'] / $europe['population'] * 100);
 //foreach ($europe as $value) {
 //    $row[] = $value;
 //}
