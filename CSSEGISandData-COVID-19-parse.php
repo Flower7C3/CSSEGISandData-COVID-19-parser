@@ -213,7 +213,7 @@ foreach ($rows as $row) {
         'deaths in population' => '',
         'active in population' => '',
         'incident rate' => '',
-        'active 1 of n' => '',
+        'active 1 per n' => '',
         'people tested' => '',
         'people hospitalized' => '',
         'first case at' => '',
@@ -250,7 +250,7 @@ foreach ($rows as $row) {
     $countriesList[$nameValue]['recovered in population'] = formatPercent($countriesList[$nameValue]['recovered total'] / $countriesList[$nameValue]['population'] * 100);
     $countriesList[$nameValue]['deaths in population'] = formatPercent($countriesList[$nameValue]['deaths total'] / $countriesList[$nameValue]['population'] * 100);
     $countriesList[$nameValue]['active in population'] = formatPercent($countriesList[$nameValue]['active total'] / $countriesList[$nameValue]['population'] * 100);
-    $countriesList[$nameValue]['active 1 of n'] = $countriesList[$nameValue]['population'] / $countriesList[$nameValue]['active total'];
+    $countriesList[$nameValue]['active 1 per n'] = $countriesList[$nameValue]['population'] / $countriesList[$nameValue]['active total'];
     # other
     $countriesList[$nameValue]['people tested'] = getCellValue($rowData, $colNameToId, 'People_Tested');
     $countriesList[$nameValue]['people hospitalized'] = getCellValue($rowData, $colNameToId, 'People_Hospitalized');
@@ -337,7 +337,7 @@ foreach ($countriesList as $countryKey => $countryData) {
     $recoveredPopulationColName = $countryName . ' ' . SERIE_RECOVERED . ' in population';
     $deadlyPopulationColName = $countryName . ' ' . SERIE_DEATHS . ' in population';
     $activePopulationColName = $countryName . ' ' . SERIE_ACTIVE . ' in population';
-    $activeOneOfEnColName = $countryName . ' active 1 of n';
+    $activeOnePerEnColName = $countryName . ' active 1 per n';
     gdataSetCase($activeColTotalName);
     gdataSetCase($recoveredPercentageColName);
     gdataSetCase($deadlyPercentageColName);
@@ -349,7 +349,7 @@ foreach ($countriesList as $countryKey => $countryData) {
     gdataSetCase($recoveredPopulationColName);
     gdataSetCase($deadlyPopulationColName);
     gdataSetCase($activePopulationColName);
-    gdataSetCase($activeOneOfEnColName);
+    gdataSetCase($activeOnePerEnColName);
     $previousDateRowId = 0;
     $firstCaseDate = '';
     foreach ($dates as $date) {
@@ -389,8 +389,8 @@ foreach ($countriesList as $countryKey => $countryData) {
         gdataSetCase($deadlyPopulationValue, $date, $deadlyPopulationColName);
         $activePopulationValue = formatPercent($activeValueToday / $populationValue * 100);
         gdataSetCase($activePopulationValue, $date, $activePopulationColName);
-        $activeOneOfEnValue = formatFloat(empty($activeValueToday) ? 0 : $populationValue / $activeValueToday);
-        gdataSetCase($activeOneOfEnValue, $date, $activeOneOfEnColName);
+        $activeOnePerEnValue = formatFloat(empty($activeValueToday) ? 0 : $populationValue / $activeValueToday);
+        gdataSetCase($activeOnePerEnValue, $date, $activeOnePerEnColName);
         $previousDateRowId = $dateRowId;
     }
     $countriesList[$countryKey]['first case at'] = $firstCaseDate;
